@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { Password, AppSettings } from '../types';
 import { encryptData, decryptData } from './encryption';
 
@@ -12,39 +13,67 @@ const KEYS = {
   BIOMETRIC_ENABLED: 'biometric_enabled',
 };
 
+// Web için fallback: SecureStore yoksa AsyncStorage kullan
+const isWeb = Platform.OS === 'web';
+
+// Güvenli storage wrapper
+async function secureSet(key: string, value: string): Promise<void> {
+  if (isWeb) {
+    await AsyncStorage.setItem(key, value);
+  } else {
+    await SecureStore.setItemAsync(key, value);
+  }
+}
+
+async function secureGet(key: string): Promise<string | null> {
+  if (isWeb) {
+    return await AsyncStorage.getItem(key);
+  } else {
+    return await SecureStore.getItemAsync(key);
+  }
+}
+
+async function secureDelete(key: string): Promise<void> {
+  if (isWeb) {
+    await AsyncStorage.removeItem(key);
+  } else {
+    await SecureStore.deleteItemAsync(key);
+  }
+}
+
 // PIN hash'i kaydet
 export async function savePinHash(hash: string): Promise<void> {
-  await SecureStore.setItemAsync(KEYS.PIN_HASH, hash);
+  await secureSet(KEYS.PIN_HASH, hash);
 }
 
 // PIN hash'i al
 export async function getPinHash(): Promise<string | null> {
-  return await SecureStore.getItemAsync(KEYS.PIN_HASH);
+  return await secureGet(KEYS.PIN_HASH);
 }
 
 // PIN salt'ı kaydet
 export async function savePinSalt(salt: string): Promise<void> {
-  await SecureStore.setItemAsync(KEYS.PIN_SALT, salt);
+  await secureSet(KEYS.PIN_SALT, salt);
 }
 
 // PIN salt'ı al
 export async function getPinSalt(): Promise<string | null> {
-  return await SecureStore.getItemAsync(KEYS.PIN_SALT);
+  return await secureGet(KEYS.PIN_SALT);
 }
 
 // Master key'i geçici olarak kaydet (session için)
 export async function saveMasterKey(key: string): Promise<void> {
-  await SecureStore.setItemAsync(KEYS.MASTER_KEY, key);
+  await secureSet(KEYS.MASTER_KEY, key);
 }
 
 // Master key'i al
 export async function getMasterKey(): Promise<string | null> {
-  return await SecureStore.getItemAsync(KEYS.MASTER_KEY);
+  return await secureGet(KEYS.MASTER_KEY);
 }
 
 // Master key'i sil (logout)
 export async function clearMasterKey(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEYS.MASTER_KEY);
+  await secureDelete(KEYS.MASTER_KEY);
 }
 
 // Şifreleri kaydet (şifreli)
@@ -52,13 +81,13 @@ export async function savePasswords(passwords: Password[], masterKey: string): P
   const json = JSON.stringify(passwords);
   const { encrypted, iv } = await encryptData(json, masterKey);
   const data = JSON.stringify({ encrypted, iv });
-  await SecureStore.setItemAsync(KEYS.PASSWORDS, data);
+  await secureSet(KEYS.PASSWORDS, data);
 }
 
 // Şifreleri al (deşifreli)
 export async function getPasswords(masterKey: string): Promise<Password[]> {
   try {
-    const data = await SecureStore.getItemAsync(KEYS.PASSWORDS);
+    const data = await secureGet(KEYS.PASSWORDS);
     if (!data) return [];
     
     const { encrypted, iv } = JSON.parse(data);
